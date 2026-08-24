@@ -50,6 +50,7 @@ export class FishingReporter implements DataReporter {
     const fishCaught$ = packets$.pipe(
       ofMessageType('fishCaught'),
       toIpcData(),
+      tap(_ => {console.log('$$$fishCaught tapped')}),
       map(packet => {
         return {
           id: packet.itemId,
@@ -87,6 +88,7 @@ export class FishingReporter implements DataReporter {
       packets$.pipe(ofMessageType('eventStart')),
       packets$.pipe(ofMessageType('eventFinish'))
     ).pipe(
+      tap(_ => {console.log('$$$isFishing tapped')}),
       filter(packet => packet.parsedIpcData.eventId === 0x150001),
       map(packet => {
         return packet.type === 'eventStart';
@@ -112,6 +114,7 @@ export class FishingReporter implements DataReporter {
         return p.scene === 2;
       })
     ).subscribe(() => {
+      console.log('setting null state because the rod left the water');
       this.setState({
         throwData: null
       });
@@ -120,6 +123,9 @@ export class FishingReporter implements DataReporter {
     const throw$ = packets$.pipe(
       ofMessageType('eventPlay4'),
       filter(packet => packet.parsedIpcData.eventId === 0x150001 && packet.parsedIpcData.scene === 1),
+      tap(packet => {
+        console.log('[fishing-reporter] throwData packet', packet)
+      }),
       delay(200),
       withLatestFrom(
         this.eorzea.statuses$,
@@ -142,6 +148,7 @@ export class FishingReporter implements DataReporter {
       filter(packet => packet.parsedIpcData.eventId === 0x150001),
       filter(packet => packet.parsedIpcData.scene === 5),
       withLatestFrom(this.eorzea.statuses$),
+      tap(_ => {console.log('$$$bite$ tapped')}),
       map(([packet, statuses]) => {
         return {
           timestamp: parseInt(packet.header.ipcTimestamp),
@@ -177,6 +184,7 @@ export class FishingReporter implements DataReporter {
         }
         return null;
       }),
+      tap(_ => {console.log('$$$moochSelection tapped')}),
       startWith(null)
     );
 
@@ -240,6 +248,8 @@ export class FishingReporter implements DataReporter {
       reset$,
       fishCaught$.pipe(debounceTime(750))
     ).pipe(
+      tap(packet => {
+        console.log('$$$resetMooch tapped...', packet)}),
       map(() => null)
     );
 
@@ -277,7 +287,8 @@ export class FishingReporter implements DataReporter {
           perception: stats.perception,
           gp: stats.gp
         } : null;
-      })
+      }),
+      tap(_ => {console.log('$$$fisherStats tapped')})
     );
 
     /**
@@ -327,7 +338,9 @@ export class FishingReporter implements DataReporter {
       });
     });
 
-    reset$.subscribe(() => this.setState({throwData: null}))
+    reset$.subscribe(() => {
+      console.log('<<setting state>> because of a reset$ packet'); this.setState({throwData: null})
+  })
 
     return merge(misses$, fishCaught$).pipe(
       withLatestFrom(isFishing$),
@@ -397,6 +410,7 @@ export class FishingReporter implements DataReporter {
         return [entry];
       }),
       tap(([report]) => {
+        console.log('<<setting state>> (appending state) because we are writing a report');
         this.setState({
           reports: [
             ...(this.state.reports || []),
@@ -418,6 +432,9 @@ export class FishingReporter implements DataReporter {
   }
 
   private setState(newState: Partial<FishingReporterState>): void {
+    try {
+      console.log('[setState]', new Date(Date.now()).toString(), newState);
+    } catch (e) {}
     this.state = {
       ...this.state,
       ...newState

@@ -523,8 +523,12 @@ export class IpcService {
     this.packets$.next(packet);
     const debugPackets = (<any>window).debugPackets;
     if (debugPackets === true || (typeof debugPackets === 'function' && debugPackets(packet))) {
+      const allowed_packets = ['eventPlay4', 'fishCaught', 'systemLogMessage', 'fishingBaitMsg', 'actorControlSelf', 'updateClassInfo', 'playerStats']
+      if(packet.type && allowed_packets.indexOf(packet.type) > -1 &&
+         packet.header.sourceActor === packet.header.targetActor){
       // eslint-disable-next-line no-restricted-syntax
       console.info(packet.type, packet);
+      }
     }
   }
 
