@@ -120,29 +120,6 @@ export class FishingReporter implements DataReporter {
       });
     });
 
-    const throw$ = packets$.pipe(
-      ofMessageType('eventPlay4'),
-      filter(packet => packet.parsedIpcData.eventId === 0x150001 && packet.parsedIpcData.scene === 1),
-      tap(packet => {
-        console.log('[fishing-reporter] throwData packet', packet)
-      }),
-      delay(200),
-      withLatestFrom(
-        this.eorzea.statuses$,
-        this.eorzea.weatherId$,
-        this.eorzea.previousWeatherId$
-      ),
-      map(([packet, statuses, weatherId, previousWeatherId]) => {
-        return {
-          timestamp: parseInt(packet.header.ipcTimestamp),
-          etime: this.etime.toEorzeanDate(new Date()),
-          statuses,
-          weatherId,
-          previousWeatherId
-        };
-      })
-    );
-
     const bite$ = packets$.pipe(
       ofMessageType('eventPlay'),
       filter(packet => packet.parsedIpcData.eventId === 0x150001),
@@ -255,6 +232,34 @@ export class FishingReporter implements DataReporter {
 
     const mooch$ = merge(moochSelection$, resetMooch$);
 
+    const throw$ = packets$.pipe(
+      ofMessageType('eventPlay4'),
+      filter(packet => packet.parsedIpcData.eventId === 0x150001 && packet.parsedIpcData.scene === 1),
+      // tap(packet => {
+      //   console.log('[fishing-reporter] throwData packet', packet)
+      // }),
+      tap(packet => {console.log('throw %s', new Date(parseInt(packet.header.ipcTimestamp)).toISOString())}),
+      delay(200),
+      withLatestFrom(
+        this.eorzea.statuses$,
+        this.eorzea.weatherId$,
+        this.eorzea.previousWeatherId$,
+        mooch$
+      ),
+      map(([packet, statuses, weatherId, previousWeatherId, mooch]) => {
+        return {
+          timestamp: parseInt(packet.header.ipcTimestamp),
+          etime: this.etime.toEorzeanDate(new Date()),
+          statuses,
+          weatherId,
+          previousWeatherId,
+          mooch
+        };
+      }),
+      tap((returna) => {
+        console.log('mooched?: %s', returna.mooch)}),
+    );
+
     const hookset$ = actionTimeline$.pipe(
       filter(key => key !== 'fishing/idle'),
       map(key => {
@@ -319,8 +324,9 @@ export class FishingReporter implements DataReporter {
       bite$.pipe(startWith(null)),
       this.fishTrainFacade.currentTrain$.pipe(startWith(null)),
       this.fishTrainFacade.currentTrainSpotId$.pipe(startWith(null))
-    ]).subscribe(([isFishing, mapId, baitId, spot, stats, mooch, statuses, weatherId, previousWeatherId, throwData, biteData, train, trainSpotId]) => {
+    ]).subscribe(([isFishing, mapId, baitId, spot, stats, _, statuses, weatherId, previousWeatherId, throwData, biteData, train, trainSpotId]) => {
       const shouldAddTrain = trainSpotId === spot?.id && getFishTrainStatus(train) === FishTrainStatus.RUNNING;
+      const mooch = throwData?.mooch;
       this.setState({
         isFishing,
         mapId,
@@ -385,7 +391,7 @@ export class FishingReporter implements DataReporter {
           intuition: throwData.statuses.some(({ id }) => id === 568),
           aLure: biteData.statuses.find(({ id }) => id === 3972)?.stacks || 0,
           mLure: biteData.statuses.find(({ id }) => id === 3973)?.stacks || 0,
-          mooch: mooch !== null,
+          mooch: throwData.mooch !== null,
           tug: biteData.tug,
           hookset,
           spot: spot.id,
@@ -393,8 +399,8 @@ export class FishingReporter implements DataReporter {
           trainId: shouldAddTrain ? train?.$key : null,
           ...stats
         };
-        if (mooch) {
-          entry.baitId = mooch;
+        if (throwData.mooch) {
+          entry.baitId = throwData.mooch;
         }
         if (entry.trainId) {
           this.fishTrainFacade.addReport({
