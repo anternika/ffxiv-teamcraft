@@ -15,18 +15,24 @@ export class GatheringNodesService {
   constructor(private lazyData: LazyDataFacade) {
   }
 
-  public getItemNodes(itemId: number, onlyDirectGathering = false): Observable<GatheringNode[]> {
-    let idsToConsider$ = of([itemId]);
+  public getItemNodes(itemId: number | number[], onlyDirectGathering = false): Observable<GatheringNode[]> {
+    const ids = Array.isArray(itemId) ? itemId : [itemId]
+    let idsToConsider$ = of(ids);
+  
     if (!onlyDirectGathering) {
-      idsToConsider$ = this.lazyData.getRow('extracts', itemId).pipe(
-        map(extract => {
-          if (extract) {
-            const reductions = getItemSource(extract, DataType.REDUCED_FROM);
-            return [itemId, ...reductions];
-          }
-          return [itemId];
-        })
-      );
+      idsToConsider$ = safeCombineLatest(
+        ids.map(itemId => 
+          this.lazyData.getRow('extracts', itemId).pipe(
+            map(extract => {
+              if (extract) {
+                const reductions = getItemSource(extract, DataType.REDUCED_FROM);
+                return [itemId, ...reductions];
+              }
+              return [itemId];
+          })
+        )
+      )
+      ).pipe(map(idGroups => idGroups.flat()));
     }
     return safeCombineLatest([
       idsToConsider$,

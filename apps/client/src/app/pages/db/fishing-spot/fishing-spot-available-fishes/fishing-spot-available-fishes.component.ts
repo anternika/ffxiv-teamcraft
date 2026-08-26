@@ -40,18 +40,20 @@ export class FishingSpotAvailableFishesComponent {
       if (fishIds.length === 0) {
         return of([]);
       }
-      return combineLatest(fishIds.map(itemId => {
-        return this.gatheringNodesService.getItemNodes(itemId, true).pipe(
-          map(nodes => {
-            const spotNode = nodes.find(n => n.id === spotId);
-            return {
-              itemId,
-              alarms: this.alarmsFacade.generateAlarms(spotNode),
-              done: logs.gathering.includes(itemId)
-            };
-          })
-        );
-      }));
+      return this.gatheringNodesService.getItemNodes(fishIds, true).pipe(
+        map(nodes => fishIds.map(itemId => {
+          const spotNode = nodes.find(n =>
+            n.matchingItemId === itemId &&
+            n.id === spotId
+          );
+
+          return {
+            itemId,
+            alarms: this.alarmsFacade.generateAlarms(spotNode),
+            done: logs.gathering.includes(itemId)
+          };
+        }))
+      );
     }),
     shareReplay({ bufferSize: 1, refCount: true })
   );
